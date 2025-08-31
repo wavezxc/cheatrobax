@@ -372,49 +372,102 @@ local function joinJob(jobId, money)
         return
     end
     
-    addLog(string.format("🚀 Заход на работу: %s ($%s/сек)", jobId, money), Color3.fromRGB(100, 255, 100))
+    addLog(string.format("🚀 Попытка захода: %s ($%s/сек)", jobId, money), Color3.fromRGB(100, 255, 100))
     
-    -- Попытка телепортации
-    pcall(function()
-        TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId, player)
+    -- Попытка телепортации с обработкой ошибок
+    local success, errorMessage = pcall(function()
+        -- Проверяем, что jobId является валидным
+        if type(jobId) == "string" and #jobId > 0 then
+            -- Пытаемся конвертировать в число если это строка
+            local jobIdNum = tonumber(jobId)
+            if jobIdNum then
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, tostring(jobIdNum), player)
+            else
+                -- Если не число, пробуем как строку
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId, player)
+            end
+        else
+            error("Неверный формат Job ID")
+        end
     end)
+    
+    if success then
+        addLog("✅ Телепортация инициирована", Color3.fromRGB(100, 255, 100))
+    else
+        addLog("❌ Ошибка телепортации: " .. tostring(errorMessage), Color3.fromRGB(255, 100, 100))
+        
+        -- Альтернативный метод телепортации
+        spawn(function()
+            wait(1)
+            addLog("🔄 Попытка альтернативной телепортации...", Color3.fromRGB(255, 200, 100))
+            
+            local altSuccess = pcall(function()
+                -- Пробуем обычную телепортацию на место
+                TeleportService:Teleport(game.PlaceId, player)
+            end)
+            
+            if altSuccess then
+                addLog("✅ Альтернативная телепортация успешна", Color3.fromRGB(100, 255, 100))
+            else
+                addLog("❌ Все методы телепортации не удались", Color3.fromRGB(255, 100, 100))
+            end
+        end)
+    end
     
     -- Уведомление
     if notifyEnabled then
-        -- Создание звукового уведомления (если возможно)
-        pcall(function()
-            local sound = Instance.new("Sound")
-            sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-            sound.Volume = 0.5
-            sound.Parent = workspace
-            sound:Play()
-            sound.Ended:Connect(function()
+        spawn(function()
+            pcall(function()
+                local sound = Instance.new("Sound")
+                sound.SoundId = "rbxassetid://131961136" -- Более надежный звук
+                sound.Volume = 0.3
+                sound.Parent = workspace
+                sound:Play()
+                
+                wait(sound.TimeLength + 0.1)
                 sound:Destroy()
             end)
         end)
     end
 end
 
--- Имитация WebSocket соединения (так как Roblox не поддерживает WebSocket)
-local function simulateWebSocketConnection()
+-- Реальная интеграция с WebSocket через HTTP запросы
+local wsUrl = "http://localhost:1488/status" -- Endpoint для проверки статуса
+local lastCheckTime = 0
+local checkInterval = 5 -- Проверяем каждые 5 секунд
+
+local function checkWebSocketData()
     spawn(function()
         while isConnected do
-            -- Имитируем получение данных каждые 15-45 секунд
-            wait(math.random(15, 45))
+            local success, response = pcall(function()
+                return HttpService:GetAsync(wsUrl, false)
+            end)
             
-            if isConnected then
-                -- Генерируем случайные данные для демонстрации
-                local mockJobId = tostring(math.random(1000000, 9999999))
-                local mockMoney = tostring(math.random(50, 2000))
-                
-                jobsFound = jobsFound + 1
-                lastJobInfo.Text = string.format("ID: %s | $%s/сек | %s", mockJobId, mockMoney, os.date("%H:%M:%S"))
-                
-                addLog(string.format("📥 Получена работа: %s ($%s/сек)", mockJobId, mockMoney), Color3.fromRGB(100, 200, 255))
-                updateStats()
-                
-                joinJob(mockJobId, mockMoney)
+            if success then
+                local data = HttpService:JSONDecode(response)
+                if data and data.jobid and data.money then
+                    -- Проверяем, что это новые данные
+                    local currentTime = tick()
+                    if currentTime - lastCheckTime > 1 then -- Защита от дубликатов
+                        lastCheckTime = currentTime
+                        
+                        jobsFound = jobsFound + 1
+                        lastJobInfo.Text = string.format("ID: %s | $%s/сек | %s", data.jobid, data.money, os.date("%H:%M:%S"))
+                        
+                        addLog(string.format("📥 WebSocket: %s ($%s/сек)", data.jobid, data.money), Color3.fromRGB(100, 255, 200))
+                        updateStats()
+                        
+                        wait(0.2)
+                        joinJob(data.jobid, data.money)
+                    end
+                end
+            else
+                -- Если WebSocket недоступен, используем симуляцию
+                simulateWebSocketConnection()
+                break
             end
+            
+            wait(checkInterval)
         end
     end)
 end
@@ -429,11 +482,41 @@ connectButton.MouseButton1Click:Connect(function()
         connectButton.Text = "Отключиться"
         connectButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
         
-        addLog("Подключение к ws://localhost:1488", Color3.fromRGB(100, 255, 100))
+        addLog("Подключение к localhost:1488", Color3.fromRGB(100, 255, 100))
         addLog("Мониторинг канала: 1401775012083404931", Color3.fromRGB(100, 200, 255))
         
         updateStats()
-        simulateWebSocketConnection()
+        
+        -- Попытка подключения к реальному WebSocket
+        spawn(function()
+            local success = pcall(function()
+                checkWebSocketData()
+            end)
+            
+            if not success then
+                addLog("⚠️ WebSocket недоступен, режим симуляции", Color3.fromRGB(255, 200, 100))
+                -- Fallback к симуляции
+                spawn(function()
+                    while isConnected do
+                        wait(math.random(30, 90))
+                        
+                        if isConnected then
+                            local mockJobId = string.format("%d", math.random(100000000, 999999999))
+                            local mockMoney = tostring(math.random(100, 1500))
+                            
+                            jobsFound = jobsFound + 1
+                            lastJobInfo.Text = string.format("ID: %s | $%s/сек | %s", mockJobId, mockMoney, os.date("%H:%M:%S"))
+                            
+                            addLog(string.format("📥 [DEMO] Работа: %s ($%s/сек)", mockJobId, mockMoney), Color3.fromRGB(255, 200, 100))
+                            updateStats()
+                            
+                            wait(0.5)
+                            joinJob(mockJobId, mockMoney)
+                        end
+                    end
+                end)
+            end
+        end)
     else
         isConnected = false
         statusLabel.Text = "🔴 Отключено от WebSocket"
