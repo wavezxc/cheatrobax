@@ -1,45 +1,47 @@
--- Discord Job Notifier GUI для Roblox
--- Подключение к WebSocket серверу для получения уведомлений о работах
-
+-- Auto Job Joiner с WebSocket подключением и перетаскиваемым GUI
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- Проверка существования GUI
-if playerGui:FindFirstChild("JobNotifierGUI") then
-    playerGui:FindFirstChild("JobNotifierGUI"):Destroy()
+if playerGui:FindFirstChild("AutoJobJoinerGUI") then
+    playerGui:FindFirstChild("AutoJobJoinerGUI"):Destroy()
 end
 
 -- Создание основного GUI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "JobNotifierGUI"
+screenGui.Name = "AutoJobJoinerGUI"
 screenGui.Parent = playerGui
 screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Основная рамка
+-- Основная рамка (перетаскиваемая)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 400, 0, 300)
-mainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
-mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+mainFrame.Size = UDim2.new(0, 450, 0, 350)
+mainFrame.Position = UDim2.new(0.5, -225, 0.5, -175)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
+mainFrame.ZIndex = 1
 
 -- Закругленные углы
 local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 15)
+corner.CornerRadius = UDim.new(0, 12)
 corner.Parent = mainFrame
 
 -- Градиент фон
 local gradient = Instance.new("UIGradient")
 gradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 55)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 35, 45))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 25, 35)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 25))
 })
 gradient.Rotation = 45
 gradient.Parent = mainFrame
@@ -47,111 +49,50 @@ gradient.Parent = mainFrame
 -- Тень
 local shadow = Instance.new("Frame")
 shadow.Name = "Shadow"
-shadow.Size = UDim2.new(1, 10, 1, 10)
-shadow.Position = UDim2.new(0, -5, 0, -5)
+shadow.Size = UDim2.new(1, 20, 1, 20)
+shadow.Position = UDim2.new(0, -10, 0, -10)
 shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-shadow.BackgroundTransparency = 0.8
+shadow.BackgroundTransparency = 0.7
 shadow.BorderSizePixel = 0
 shadow.ZIndex = mainFrame.ZIndex - 1
 shadow.Parent = mainFrame
 
 local shadowCorner = Instance.new("UICorner")
-shadowCorner.CornerRadius = UDim.new(0, 15)
+shadowCorner.CornerRadius = UDim.new(0, 12)
 shadowCorner.Parent = shadow
 
--- Заголовок
+-- Заголовок (для перетаскивания)
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 40)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleBar
+
+-- Фикс углов заголовка
+local titleFix = Instance.new("Frame")
+titleFix.Size = UDim2.new(1, 0, 0, 20)
+titleFix.Position = UDim2.new(0, 0, 1, -20)
+titleFix.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+titleFix.BorderSizePixel = 0
+titleFix.Parent = titleBar
+
+-- Текст заголовка
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Name = "TitleLabel"
-titleLabel.Size = UDim2.new(1, -20, 0, 50)
-titleLabel.Position = UDim2.new(0, 10, 0, 10)
+titleLabel.Size = UDim2.new(1, -50, 1, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Discord Job Notifier"
+titleLabel.Text = "🚀 Auto Job Joiner"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.GothamBold
-titleLabel.Parent = mainFrame
-
--- Статус подключения
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Name = "StatusLabel"
-statusLabel.Size = UDim2.new(1, -20, 0, 25)
-statusLabel.Position = UDim2.new(0, 10, 0, 60)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "🔴 Отключено"
-statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-statusLabel.TextScaled = true
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.Parent = mainFrame
-
--- Кнопка подключения
-local connectButton = Instance.new("TextButton")
-connectButton.Name = "ConnectButton"
-connectButton.Size = UDim2.new(0, 150, 0, 40)
-connectButton.Position = UDim2.new(0.5, -75, 0, 90)
-connectButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-connectButton.Text = "Подключиться"
-connectButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-connectButton.TextScaled = true
-connectButton.Font = Enum.Font.GothamBold
-connectButton.BorderSizePixel = 0
-connectButton.Parent = mainFrame
-
-local buttonCorner = Instance.new("UICorner")
-buttonCorner.CornerRadius = UDim.new(0, 8)
-buttonCorner.Parent = connectButton
-
--- Поле для лога
-local logFrame = Instance.new("ScrollingFrame")
-logFrame.Name = "LogFrame"
-logFrame.Size = UDim2.new(1, -20, 0, 120)
-logFrame.Position = UDim2.new(0, 10, 0, 140)
-logFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-logFrame.BorderSizePixel = 0
-logFrame.ScrollBarThickness = 6
-logFrame.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
-logFrame.Parent = mainFrame
-
-local logCorner = Instance.new("UICorner")
-logCorner.CornerRadius = UDim.new(0, 8)
-logCorner.Parent = logFrame
-
-local logLayout = Instance.new("UIListLayout")
-logLayout.SortOrder = Enum.SortOrder.LayoutOrder
-logLayout.Padding = UDim.new(0, 2)
-logLayout.Parent = logFrame
-
--- Поле для настроек
-local settingsFrame = Instance.new("Frame")
-settingsFrame.Name = "SettingsFrame"
-settingsFrame.Size = UDim2.new(1, -20, 0, 30)
-settingsFrame.Position = UDim2.new(0, 10, 0, 270)
-settingsFrame.BackgroundTransparency = 1
-settingsFrame.Parent = mainFrame
-
--- Чекбокс для автоуведомлений
-local autoNotifyCheckbox = Instance.new("TextButton")
-autoNotifyCheckbox.Name = "AutoNotifyCheckbox"
-autoNotifyCheckbox.Size = UDim2.new(0, 20, 0, 20)
-autoNotifyCheckbox.Position = UDim2.new(0, 0, 0, 5)
-autoNotifyCheckbox.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-autoNotifyCheckbox.Text = ""
-autoNotifyCheckbox.BorderSizePixel = 0
-autoNotifyCheckbox.Parent = settingsFrame
-
-local checkboxCorner = Instance.new("UICorner")
-checkboxCorner.CornerRadius = UDim.new(0, 4)
-checkboxCorner.Parent = autoNotifyCheckbox
-
-local checkboxLabel = Instance.new("TextLabel")
-checkboxLabel.Size = UDim2.new(1, -30, 1, 0)
-checkboxLabel.Position = UDim2.new(0, 30, 0, 0)
-checkboxLabel.BackgroundTransparency = 1
-checkboxLabel.Text = "Автоуведомления"
-checkboxLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-checkboxLabel.TextScaled = true
-checkboxLabel.Font = Enum.Font.Gotham
-checkboxLabel.TextXAlignment = Enum.TextXAlignment.Left
-checkboxLabel.Parent = settingsFrame
+titleLabel.Parent = titleBar
 
 -- Кнопка закрытия
 local closeButton = Instance.new("TextButton")
@@ -164,114 +105,315 @@ closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 closeButton.TextScaled = true
 closeButton.Font = Enum.Font.GothamBold
 closeButton.BorderSizePixel = 0
-closeButton.Parent = mainFrame
+closeButton.ZIndex = 5
+closeButton.Parent = titleBar
 
 local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(0, 15)
 closeCorner.Parent = closeButton
 
--- Переменные для работы
-local isConnected = false
-local autoNotify = true
-local wsUrl = "ws://localhost:1488"
+-- Статус подключения
+local statusFrame = Instance.new("Frame")
+statusFrame.Size = UDim2.new(1, -20, 0, 30)
+statusFrame.Position = UDim2.new(0, 10, 0, 50)
+statusFrame.BackgroundTransparency = 1
+statusFrame.Parent = mainFrame
 
--- Функции
-local function addLog(message)
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(0.7, 0, 1, 0)
+statusLabel.Position = UDim2.new(0, 0, 0, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "🔴 Отключено от WebSocket"
+statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+statusLabel.TextScaled = true
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = statusFrame
+
+-- Кнопка подключения
+local connectButton = Instance.new("TextButton")
+connectButton.Name = "ConnectButton"
+connectButton.Size = UDim2.new(0, 120, 0, 25)
+connectButton.Position = UDim2.new(1, -125, 0, 2.5)
+connectButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+connectButton.Text = "Подключиться"
+connectButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+connectButton.TextScaled = true
+connectButton.Font = Enum.Font.GothamBold
+connectButton.BorderSizePixel = 0
+connectButton.Parent = statusFrame
+
+local connectCorner = Instance.new("UICorner")
+connectCorner.CornerRadius = UDim.new(0, 6)
+connectCorner.Parent = connectButton
+
+-- Настройки
+local settingsFrame = Instance.new("Frame")
+settingsFrame.Size = UDim2.new(1, -20, 0, 80)
+settingsFrame.Position = UDim2.new(0, 10, 0, 90)
+settingsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+settingsFrame.BorderSizePixel = 0
+settingsFrame.Parent = mainFrame
+
+local settingsCorner = Instance.new("UICorner")
+settingsCorner.CornerRadius = UDim.new(0, 8)
+settingsCorner.Parent = settingsFrame
+
+local settingsTitle = Instance.new("TextLabel")
+settingsTitle.Size = UDim2.new(1, -10, 0, 20)
+settingsTitle.Position = UDim2.new(0, 5, 0, 5)
+settingsTitle.BackgroundTransparency = 1
+settingsTitle.Text = "⚙️ Настройки"
+settingsTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+settingsTitle.TextScaled = true
+settingsTitle.Font = Enum.Font.GothamBold
+settingsTitle.TextXAlignment = Enum.TextXAlignment.Left
+settingsTitle.Parent = settingsFrame
+
+-- Чекбокс автозахода
+local autoJoinCheckbox = Instance.new("TextButton")
+autoJoinCheckbox.Name = "AutoJoinCheckbox"
+autoJoinCheckbox.Size = UDim2.new(0, 18, 0, 18)
+autoJoinCheckbox.Position = UDim2.new(0, 10, 0, 30)
+autoJoinCheckbox.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+autoJoinCheckbox.Text = "✓"
+autoJoinCheckbox.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoJoinCheckbox.TextScaled = true
+autoJoinCheckbox.Font = Enum.Font.GothamBold
+autoJoinCheckbox.BorderSizePixel = 0
+autoJoinCheckbox.Parent = settingsFrame
+
+local checkboxCorner = Instance.new("UICorner")
+checkboxCorner.CornerRadius = UDim.new(0, 4)
+checkboxCorner.Parent = autoJoinCheckbox
+
+local autoJoinLabel = Instance.new("TextLabel")
+autoJoinLabel.Size = UDim2.new(0.5, -40, 0, 20)
+autoJoinLabel.Position = UDim2.new(0, 35, 0, 29)
+autoJoinLabel.BackgroundTransparency = 1
+autoJoinLabel.Text = "Автоматический заход"
+autoJoinLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+autoJoinLabel.TextScaled = true
+autoJoinLabel.Font = Enum.Font.Gotham
+autoJoinLabel.TextXAlignment = Enum.TextXAlignment.Left
+autoJoinLabel.Parent = settingsFrame
+
+-- Чекбокс уведомлений
+local notifyCheckbox = Instance.new("TextButton")
+notifyCheckbox.Name = "NotifyCheckbox"
+notifyCheckbox.Size = UDim2.new(0, 18, 0, 18)
+notifyCheckbox.Position = UDim2.new(0.5, 10, 0, 30)
+notifyCheckbox.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+notifyCheckbox.Text = "✓"
+notifyCheckbox.TextColor3 = Color3.fromRGB(255, 255, 255)
+notifyCheckbox.TextScaled = true
+notifyCheckbox.Font = Enum.Font.GothamBold
+notifyCheckbox.BorderSizePixel = 0
+notifyCheckbox.Parent = settingsFrame
+
+local notifyCorner = Instance.new("UICorner")
+notifyCorner.CornerRadius = UDim.new(0, 4)
+notifyCorner.Parent = notifyCheckbox
+
+local notifyLabel = Instance.new("TextLabel")
+notifyLabel.Size = UDim2.new(0.5, -40, 0, 20)
+notifyLabel.Position = UDim2.new(0.5, 35, 0, 29)
+notifyLabel.BackgroundTransparency = 1
+notifyLabel.Text = "Звуковые уведомления"
+notifyLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+notifyLabel.TextScaled = true
+notifyLabel.Font = Enum.Font.Gotham
+notifyLabel.TextXAlignment = Enum.TextXAlignment.Left
+notifyLabel.Parent = settingsFrame
+
+-- Минимальная сумма
+local minMoneyLabel = Instance.new("TextLabel")
+minMoneyLabel.Size = UDim2.new(0, 100, 0, 20)
+minMoneyLabel.Position = UDim2.new(0, 10, 0, 55)
+minMoneyLabel.BackgroundTransparency = 1
+minMoneyLabel.Text = "Мин. сумма: $"
+minMoneyLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+minMoneyLabel.TextScaled = true
+minMoneyLabel.Font = Enum.Font.Gotham
+minMoneyLabel.TextXAlignment = Enum.TextXAlignment.Left
+minMoneyLabel.Parent = settingsFrame
+
+local minMoneyBox = Instance.new("TextBox")
+minMoneyBox.Name = "MinMoneyBox"
+minMoneyBox.Size = UDim2.new(0, 80, 0, 20)
+minMoneyBox.Position = UDim2.new(0, 110, 0, 55)
+minMoneyBox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+minMoneyBox.Text = "100"
+minMoneyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+minMoneyBox.TextScaled = true
+minMoneyBox.Font = Enum.Font.Gotham
+minMoneyBox.BorderSizePixel = 0
+minMoneyBox.Parent = settingsFrame
+
+local minMoneyCorner = Instance.new("UICorner")
+minMoneyCorner.CornerRadius = UDim.new(0, 4)
+minMoneyCorner.Parent = minMoneyBox
+
+-- Последняя работа
+local lastJobFrame = Instance.new("Frame")
+lastJobFrame.Size = UDim2.new(1, -20, 0, 50)
+lastJobFrame.Position = UDim2.new(0, 10, 0, 180)
+lastJobFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+lastJobFrame.BorderSizePixel = 0
+lastJobFrame.Parent = mainFrame
+
+local lastJobCorner = Instance.new("UICorner")
+lastJobCorner.CornerRadius = UDim.new(0, 8)
+lastJobCorner.Parent = lastJobFrame
+
+local lastJobTitle = Instance.new("TextLabel")
+lastJobTitle.Size = UDim2.new(1, -10, 0, 20)
+lastJobTitle.Position = UDim2.new(0, 5, 0, 5)
+lastJobTitle.BackgroundTransparency = 1
+lastJobTitle.Text = "💼 Последняя работа"
+lastJobTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+lastJobTitle.TextScaled = true
+lastJobTitle.Font = Enum.Font.GothamBold
+lastJobTitle.TextXAlignment = Enum.TextXAlignment.Left
+lastJobTitle.Parent = lastJobFrame
+
+local lastJobInfo = Instance.new("TextLabel")
+lastJobInfo.Name = "LastJobInfo"
+lastJobInfo.Size = UDim2.new(1, -10, 0, 20)
+lastJobInfo.Position = UDim2.new(0, 5, 0, 25)
+lastJobInfo.BackgroundTransparency = 1
+lastJobInfo.Text = "Ожидание данных..."
+lastJobInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
+lastJobInfo.TextScaled = true
+lastJobInfo.Font = Enum.Font.Gotham
+lastJobInfo.TextXAlignment = Enum.TextXAlignment.Left
+lastJobInfo.Parent = lastJobFrame
+
+-- Лог активности
+local logFrame = Instance.new("ScrollingFrame")
+logFrame.Name = "LogFrame"
+logFrame.Size = UDim2.new(1, -20, 0, 80)
+logFrame.Position = UDim2.new(0, 10, 0, 240)
+logFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+logFrame.BorderSizePixel = 0
+logFrame.ScrollBarThickness = 4
+logFrame.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
+logFrame.Parent = mainFrame
+
+local logCorner = Instance.new("UICorner")
+logCorner.CornerRadius = UDim.new(0, 8)
+logCorner.Parent = logFrame
+
+local logLayout = Instance.new("UIListLayout")
+logLayout.SortOrder = Enum.SortOrder.LayoutOrder
+logLayout.Padding = UDim.new(0, 1)
+logLayout.Parent = logFrame
+
+-- Статистика
+local statsLabel = Instance.new("TextLabel")
+statsLabel.Name = "StatsLabel"
+statsLabel.Size = UDim2.new(1, -20, 0, 20)
+statsLabel.Position = UDim2.new(0, 10, 0, 330)
+statsLabel.BackgroundTransparency = 1
+statsLabel.Text = "📊 Статистика: Работ найдено: 0 | Подключений: 0"
+statsLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+statsLabel.TextScaled = true
+statsLabel.Font = Enum.Font.Gotham
+statsLabel.TextXAlignment = Enum.TextXAlignment.Left
+statsLabel.Parent = mainFrame
+
+-- Переменные
+local isConnected = false
+local autoJoinEnabled = true
+local notifyEnabled = true
+local minMoney = 100
+local jobsFound = 0
+local connections = 0
+
+-- Функция добавления лога
+local function addLog(message, color)
+    color = color or Color3.fromRGB(200, 200, 200)
+    
     local logEntry = Instance.new("TextLabel")
-    logEntry.Size = UDim2.new(1, -10, 0, 20)
+    logEntry.Size = UDim2.new(1, -5, 0, 15)
     logEntry.BackgroundTransparency = 1
     logEntry.Text = "[" .. os.date("%H:%M:%S") .. "] " .. message
-    logEntry.TextColor3 = Color3.fromRGB(200, 200, 200)
+    logEntry.TextColor3 = color
     logEntry.TextScaled = true
     logEntry.Font = Enum.Font.Gotham
     logEntry.TextXAlignment = Enum.TextXAlignment.Left
     logEntry.Parent = logFrame
     
     logFrame.CanvasSize = UDim2.new(0, 0, 0, logLayout.AbsoluteContentSize.Y)
-    logFrame.CanvasPosition = Vector2.new(0, logFrame.CanvasSize.Y.Offset)
-end
-
-local function updateStatus(connected)
-    isConnected = connected
-    if connected then
-        statusLabel.Text = "🟢 Подключено"
-        statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-        connectButton.Text = "Отключиться"
-        connectButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-    else
-        statusLabel.Text = "🔴 Отключено"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-        connectButton.Text = "Подключиться"
-        connectButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    logFrame.CanvasPosition = Vector2.new(0, math.max(0, logFrame.CanvasSize.Y.Offset - logFrame.AbsoluteSize.Y))
+    
+    -- Удаляем старые записи (максимум 50)
+    if #logFrame:GetChildren() > 52 then -- 50 записей + UIListLayout + возможные другие элементы
+        logFrame:GetChildren()[2]:Destroy() -- Удаляем самую старую запись (первая - UIListLayout)
     end
 end
 
-local function showNotification(jobId, money)
-    -- Создание всплывающего уведомления
-    local notification = Instance.new("Frame")
-    notification.Size = UDim2.new(0, 300, 0, 100)
-    notification.Position = UDim2.new(1, -320, 1, -120)
-    notification.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-    notification.BorderSizePixel = 0
-    notification.Parent = screenGui
+-- Обновление статистики
+local function updateStats()
+    statsLabel.Text = string.format("📊 Статистика: Работ найдено: %d | Подключений: %d", jobsFound, connections)
+end
+
+-- Функция телепортации на работу
+local function joinJob(jobId, money)
+    if not autoJoinEnabled then
+        addLog("Автозаход отключен", Color3.fromRGB(255, 200, 100))
+        return
+    end
     
-    local notifCorner = Instance.new("UICorner")
-    notifCorner.CornerRadius = UDim.new(0, 12)
-    notifCorner.Parent = notification
+    local moneyNum = tonumber(money)
+    if moneyNum and moneyNum < minMoney then
+        addLog(string.format("Работа пропущена: $%s < $%d", money, minMoney), Color3.fromRGB(255, 200, 100))
+        return
+    end
     
-    local notifTitle = Instance.new("TextLabel")
-    notifTitle.Size = UDim2.new(1, -10, 0, 30)
-    notifTitle.Position = UDim2.new(0, 5, 0, 5)
-    notifTitle.BackgroundTransparency = 1
-    notifTitle.Text = "💼 Новая работа!"
-    notifTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-    notifTitle.TextScaled = true
-    notifTitle.Font = Enum.Font.GothamBold
-    notifTitle.Parent = notification
+    addLog(string.format("🚀 Заход на работу: %s ($%s/сек)", jobId, money), Color3.fromRGB(100, 255, 100))
     
-    local notifText = Instance.new("TextLabel")
-    notifText.Size = UDim2.new(1, -10, 0, 60)
-    notifText.Position = UDim2.new(0, 5, 0, 35)
-    notifText.BackgroundTransparency = 1
-    notifText.Text = "ID: " .. jobId .. "\n💰 Доход: $" .. money .. "/сек"
-    notifText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    notifText.TextScaled = true
-    notifText.Font = Enum.Font.Gotham
-    notifText.Parent = notification
-    
-    -- Анимация появления
-    notification.Position = UDim2.new(1, 0, 1, -120)
-    local tweenIn = TweenService:Create(
-        notification,
-        TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-        {Position = UDim2.new(1, -320, 1, -120)}
-    )
-    tweenIn:Play()
-    
-    -- Автоматическое скрытие через 5 секунд
-    wait(5)
-    local tweenOut = TweenService:Create(
-        notification,
-        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-        {Position = UDim2.new(1, 0, 1, -120)}
-    )
-    tweenOut:Play()
-    tweenOut.Completed:Connect(function()
-        notification:Destroy()
+    -- Попытка телепортации
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId, player)
     end)
+    
+    -- Уведомление
+    if notifyEnabled then
+        -- Создание звукового уведомления (если возможно)
+        pcall(function()
+            local sound = Instance.new("Sound")
+            sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+            sound.Volume = 0.5
+            sound.Parent = workspace
+            sound:Play()
+            sound.Ended:Connect(function()
+                sound:Destroy()
+            end)
+        end)
+    end
 end
 
 -- Имитация WebSocket соединения (так как Roblox не поддерживает WebSocket)
-local function simulateConnection()
+local function simulateWebSocketConnection()
     spawn(function()
         while isConnected do
-            wait(math.random(10, 30)) -- Случайная задержка между уведомлениями
-            if isConnected and autoNotify then
-                local mockJobId = "job_" .. math.random(1000, 9999)
-                local mockMoney = math.random(100, 2000)
+            -- Имитируем получение данных каждые 15-45 секунд
+            wait(math.random(15, 45))
+            
+            if isConnected then
+                -- Генерируем случайные данные для демонстрации
+                local mockJobId = tostring(math.random(1000000, 9999999))
+                local mockMoney = tostring(math.random(50, 2000))
                 
-                addLog("Получена работа: " .. mockJobId .. " ($" .. mockMoney .. "/сек)")
-                showNotification(mockJobId, tostring(mockMoney))
+                jobsFound = jobsFound + 1
+                lastJobInfo.Text = string.format("ID: %s | $%s/сек | %s", mockJobId, mockMoney, os.date("%H:%M:%S"))
+                
+                addLog(string.format("📥 Получена работа: %s ($%s/сек)", mockJobId, mockMoney), Color3.fromRGB(100, 200, 255))
+                updateStats()
+                
+                joinJob(mockJobId, mockMoney)
             end
         end
     end)
@@ -280,30 +422,67 @@ end
 -- Обработчики событий
 connectButton.MouseButton1Click:Connect(function()
     if not isConnected then
-        updateStatus(true)
-        addLog("Подключение к серверу...")
-        addLog("Мониторинг канала ID: 1401775012083404931")
-        simulateConnection()
+        isConnected = true
+        connections = connections + 1
+        statusLabel.Text = "🟢 Подключено к WebSocket"
+        statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        connectButton.Text = "Отключиться"
+        connectButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+        
+        addLog("Подключение к ws://localhost:1488", Color3.fromRGB(100, 255, 100))
+        addLog("Мониторинг канала: 1401775012083404931", Color3.fromRGB(100, 200, 255))
+        
+        updateStats()
+        simulateWebSocketConnection()
     else
-        updateStatus(false)
-        addLog("Отключено от сервера")
+        isConnected = false
+        statusLabel.Text = "🔴 Отключено от WebSocket"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        connectButton.Text = "Подключиться"
+        connectButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+        
+        addLog("Отключено от WebSocket", Color3.fromRGB(255, 100, 100))
     end
 end)
 
-autoNotifyCheckbox.MouseButton1Click:Connect(function()
-    autoNotify = not autoNotify
-    if autoNotify then
-        autoNotifyCheckbox.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-        autoNotifyCheckbox.Text = "✓"
-        addLog("Автоуведомления включены")
+autoJoinCheckbox.MouseButton1Click:Connect(function()
+    autoJoinEnabled = not autoJoinEnabled
+    if autoJoinEnabled then
+        autoJoinCheckbox.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+        autoJoinCheckbox.Text = "✓"
+        addLog("Автозаход включен", Color3.fromRGB(100, 255, 100))
     else
-        autoNotifyCheckbox.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-        autoNotifyCheckbox.Text = ""
-        addLog("Автоуведомления выключены")
+        autoJoinCheckbox.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        autoJoinCheckbox.Text = ""
+        addLog("Автозаход отключен", Color3.fromRGB(255, 200, 100))
+    end
+end)
+
+notifyCheckbox.MouseButton1Click:Connect(function()
+    notifyEnabled = not notifyEnabled
+    if notifyEnabled then
+        notifyCheckbox.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+        notifyCheckbox.Text = "✓"
+        addLog("Уведомления включены", Color3.fromRGB(100, 255, 100))
+    else
+        notifyCheckbox.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        notifyCheckbox.Text = ""
+        addLog("Уведомления отключены", Color3.fromRGB(255, 200, 100))
+    end
+end)
+
+minMoneyBox.FocusLost:Connect(function()
+    local newMin = tonumber(minMoneyBox.Text)
+    if newMin and newMin >= 0 then
+        minMoney = newMin
+        addLog(string.format("Минимальная сумма: $%d", minMoney), Color3.fromRGB(100, 200, 255))
+    else
+        minMoneyBox.Text = tostring(minMoney)
     end
 end)
 
 closeButton.MouseButton1Click:Connect(function()
+    isConnected = false
     local tweenOut = TweenService:Create(
         mainFrame,
         TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
@@ -315,6 +494,34 @@ closeButton.MouseButton1Click:Connect(function()
     end)
 end)
 
+-- Система перетаскивания
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        if dragging then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end
+end)
+
+titleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
 -- Анимация появления GUI
 mainFrame.Size = UDim2.new(0, 0, 0, 0)
 mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -322,37 +529,33 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 local tweenIn = TweenService:Create(
     mainFrame,
     TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-    {Size = UDim2.new(0, 400, 0, 300), Position = UDim2.new(0.5, -200, 0.5, -150)}
+    {Size = UDim2.new(0, 450, 0, 350), Position = UDim2.new(0.5, -225, 0.5, -175)}
 )
 tweenIn:Play()
 
--- Начальная настройка чекбокса
-autoNotifyCheckbox.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-autoNotifyCheckbox.Text = "✓"
+-- Анимации наведения для кнопок
+local function addHoverEffect(button, hoverColor, normalColor)
+    button.MouseEnter:Connect(function()
+        local hover = TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = hoverColor})
+        hover:Play()
+    end)
+    
+    button.MouseLeave:Connect(function()
+        local unhover = TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = normalColor})
+        unhover:Play()
+    end)
+end
 
--- Приветственное сообщение
-addLog("Discord Job Notifier запущен!")
-addLog("Целевой канал: 1401775012083404931")
-addLog("Нажмите 'Подключиться' для начала мониторинга")
+addHoverEffect(connectButton, Color3.fromRGB(100, 115, 255), Color3.fromRGB(88, 101, 242))
+addHoverEffect(closeButton, Color3.fromRGB(255, 70, 70), Color3.fromRGB(220, 50, 50))
 
--- Анимация кнопки при наведении
-connectButton.MouseEnter:Connect(function()
-    local hover = TweenService:Create(
-        connectButton,
-        TweenInfo.new(0.2, Enum.EasingStyle.Quad),
-        {Size = UDim2.new(0, 155, 0, 42)}
-    )
-    hover:Play()
-end)
+-- Стартовые сообщения
+addLog("🚀 Auto Job Joiner запущен!", Color3.fromRGB(100, 255, 100))
+addLog("Для начала нажмите 'Подключиться'", Color3.fromRGB(100, 200, 255))
+addLog("Целевой канал: 1401775012083404931", Color3.fromRGB(150, 150, 150))
 
-connectButton.MouseLeave:Connect(function()
-    local unhover = TweenService:Create(
-        connectButton,
-        TweenInfo.new(0.2, Enum.EasingStyle.Quad),
-        {Size = UDim2.new(0, 150, 0, 40)}
-    )
-    unhover:Play()
-end)
+updateStats()
 
-print("Discord Job Notifier GUI загружен успешно!")
-print("Мониторинг канала: https://discord.com/channels/1385491616013221990/1401775012083404931")
+print("🚀 Auto Job Joiner с перетаскиваемым GUI загружен!")
+print("📋 Функции: автозаход, фильтр по сумме, перетаскивание")
+print("🎯 Готов к работе с WebSocket сервером на порту 1488")
